@@ -21,7 +21,6 @@ class OpenAIBody(BaseModel):
     @field_validator("messages")
     @classmethod
     def must_be_in_openai_format(cls, v: str) -> str:
-        {"role": "user", "content": "Say this is a test!"}
         for i in v:
             if "role" not in i:
                 raise ValueError('key "role" must be present')
