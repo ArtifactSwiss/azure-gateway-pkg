@@ -7,6 +7,13 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from ._constants import ENDPOINT_URL
 
 
+class BytesEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bytes):
+            return obj.decode("utf-8")
+        return json.JSONEncoder.default(self, obj)
+
+
 class OpenAIBody(BaseModel):
     model_config = ConfigDict(protected_namespaces=(""))
     user_id: str | None = None
@@ -30,6 +37,9 @@ class OpenAIBody(BaseModel):
                 raise ValueError('key "content" must be present')
         return v
 
+    def to_json(self):
+        return json.dumps({k: v for k, v in dict(self).items() if v is not None}, cls=BytesEncoder)
+
 
 def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
     """
@@ -44,7 +54,7 @@ def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
 
     if isinstance(params, dict):
         params = OpenAIBody(**params)
-    payload = params.model_dump_json(exclude_defaults=True, exclude_none=True)
+    payload = params.to_json()
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
     response = requests.request("POST", url_with_project_id, headers=headers, data=payload)
     response.raise_for_status()
