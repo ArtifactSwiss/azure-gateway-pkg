@@ -12,6 +12,8 @@ pip install git+https://github.com/ArtifactSwiss/azure-gateway-pkg.git
 
 2. Use python package as `azure_gateway`
 
+If you want a specific version, append `@VERSION` to the installation above. Versions can be found in the [releases tab](https://github.com/ArtifactSwiss/azure-gateway-pkg/releases).
+
 ## Usage
 
 - There are always two parts to one request type:
