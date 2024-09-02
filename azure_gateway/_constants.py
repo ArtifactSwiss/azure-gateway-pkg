@@ -1,1 +1,1 @@
-ENDPOINT_URL = "https://arti-gateway.switzerlandnorth.cloudapp.azure.com/api"
+ENDPOINT_URL = "https://arti-gateway.up.railway.app"
