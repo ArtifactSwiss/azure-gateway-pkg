@@ -1,0 +1,2 @@
+class OutOfQuotaError(Exception):
+    pass
