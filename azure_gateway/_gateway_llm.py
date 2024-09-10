@@ -10,8 +10,9 @@ from langchain_core.language_models.llms import LLM
 from openai import AzureOpenAI
 from requests_sse import EventSource
 
-from azure_gateway import parse_openai_chat_response, OutOfQuotaError
-from azure_gateway._logger import LoggerWrapper
+from ._chat import parse_openai_chat_response
+from ._exceptions import OutOfQuotaError
+from ._logger import LoggerWrapper
 
 
 Callback = Callable[[str], None]
