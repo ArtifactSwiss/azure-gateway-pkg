@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import Callable, Any
+from typing import Callable
 
 import requests
 import tiktoken
@@ -14,11 +14,12 @@ from azure_gateway import parse_openai_chat_response, OutOfQuotaError
 from azure_gateway._logger import LoggerWrapper
 
 
-Callback = Callable[[str], Any]
+Callback = Callable[[str], None]
 ServiceResponse = tuple[str, int, int]
 
 
-class GatewayLLM(LLM):
+class BaseGatewayLLM(LLM):
+    """Base class for Gateway LLM"""
     project_id: str
     model_id: str
     model_type: str
@@ -89,9 +90,7 @@ class GatewayLLM(LLM):
 
         within_quota = quota_check_json["within_quota"]
         if not within_quota:
-            raise HTTPException(
-                401, "The LLM usage quota has been exceeded and the service can no longer be used."
-            )
+            raise OutOfQuotaError("The LLM usage quota has been exceeded and the service can no longer be used.")
 
         usage = quota_check_json["usage"]
         quota = quota_check_json["quota"]
@@ -115,21 +114,19 @@ class GatewayLLM(LLM):
         """
         Execute the given gateway query function in a safe way.
 
-        If the Gateway call fails due to the quota being used up, raise an HTTPException.
+        If the Gateway call fails due to the quota being used up, raise OutOfQuotaError.
         If the Gateway call fails due to some internal problems with the Gateway, log the error and continue.
         """
         try:
             query_function()
         except OutOfQuotaError:
-            raise HTTPException(
-                403, "The LLM usage quota has been exceeded and the service can no longer be used."
-            )
+            raise
         except Exception as e:
             self.log.error("there was an error querying the gateway")
             self.log.error(e)
 
 
-class OpenAIGatewayLLM(GatewayLLM):
+class OpenAIGatewayLLM(BaseGatewayLLM):
     client: AzureOpenAI
 
     def _call_service(self, callback: Callback | None) -> ServiceResponse:
@@ -190,7 +187,7 @@ class OpenAIGatewayLLM(GatewayLLM):
         return response_text, len(prompt_tokens), len(completion_tokens)
 
 
-class GenericGatewayLLM(GatewayLLM):
+class GenericGatewayLLM(BaseGatewayLLM):
     model_token: str
 
     def _call_service(self, callback: Callback | None) -> ServiceResponse:
