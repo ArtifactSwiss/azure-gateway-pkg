@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import Callable
+from typing import Callable, Any
 
 import requests
 import tiktoken
@@ -20,6 +20,7 @@ ServiceResponse = tuple[str, int, int]
 
 class BaseGatewayLLM(LLM):
     """Base class for Gateway LLM"""
+
     project_id: str
     model_id: str
     model_type: str
@@ -74,7 +75,10 @@ class BaseGatewayLLM(LLM):
         """Check the current usage quota and raise an error if the project is out of quota."""
         quota_check_response = requests.get(
             os.environ["GATEWAY_HIGH_TRAFFIC_URL"],
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.gateway_auth_token}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.gateway_auth_token}",
+            },
             params={"project_id": self.project_id},
             timeout=10,
         )
@@ -90,7 +94,9 @@ class BaseGatewayLLM(LLM):
 
         within_quota = quota_check_json["within_quota"]
         if not within_quota:
-            raise OutOfQuotaError("The LLM usage quota has been exceeded and the service can no longer be used.")
+            raise OutOfQuotaError(
+                "The LLM usage quota has been exceeded and the service can no longer be used."
+            )
 
         usage = quota_check_json["usage"]
         quota = quota_check_json["quota"]
@@ -103,7 +109,10 @@ class BaseGatewayLLM(LLM):
 
         quota_update_response = requests.post(
             os.environ["GATEWAY_HIGH_TRAFFIC_URL"],
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.gateway_auth_token}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.gateway_auth_token}",
+            },
             params={"project_id": self.project_id},
             json={"model_id": self.model_id, "usage_quantity": additional_usage},
             timeout=10,
@@ -154,21 +163,18 @@ class BaseGatewayLLM(LLM):
 
 class OpenAIGatewayLLM(BaseGatewayLLM):
     client: AzureOpenAI
+    temperature: float = 0.7
 
     def _call_service(self, callback: Callback | None) -> ServiceResponse:
         if callback is None:
-            response_text, prompt_tokens, completion_tokens = self._regular_chat_completion()
-        else:
-            response_text, prompt_tokens, completion_tokens = self._streaming_chat_completion(
-                callback
-            )
+            return self._regular_chat_completion()
 
-        return response_text, prompt_tokens, completion_tokens
+        return self._streaming_chat_completion(callback)
 
     def _regular_chat_completion(self):
         self.log.info("CALL - regular chat completion")
         response = self.client.chat.completions.create(
-            model=self.model_id, messages=self.conversation_history, temperature=0.7
+            model=self.model_id, messages=self.conversation_history, temperature=self.temperature
         )
         req_response = requests.Response()
         req_response.status_code = 200
@@ -192,7 +198,10 @@ class OpenAIGatewayLLM(BaseGatewayLLM):
         encoding = tiktoken.get_encoding("cl100k_base")
 
         stream = self.client.chat.completions.create(
-            model=self.model_id, messages=self.conversation_history, temperature=0.7, stream=True
+            model=self.model_id,
+            messages=self.conversation_history,
+            temperature=self.temperature,
+            stream=True,
         )
 
         for chunk in stream:
@@ -219,64 +228,70 @@ class GenericGatewayLLM(BaseGatewayLLM):
     def _call_service(self, callback: Callback | None) -> ServiceResponse:
         headers = {
             "Authorization": f"Bearer {self.model_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        body = {
-            "messages": self.conversation_history
-        }
+        body = {"messages": self.conversation_history}
 
         url = f"{self.model_url}chat/completions"
 
         if callback is None:
-            # If there is no callback given, we simply use the regular chat completion.
+            return self._regular_chat_completion(url=url, headers=headers, body=body)
 
-            response = requests.post(url=url, headers=headers, json=body)
-            response_text = self.parse_chat_response(response)
+        return self._streaming_chat_completion(
+            callback=callback, url=url, headers=headers, body=body
+        )
 
-            response_json = response.json()
-            if "usage" not in response_json:
-                self.log.error("no token usage in LLM response")
-                prompt_tokens = 0
-                completion_tokens = 0
-            else:
-                prompt_tokens = response_json["usage"]["prompt_tokens"]
-                completion_tokens = response_json["usage"]["completion_tokens"]
+    def _regular_chat_completion(
+        self, url: str, headers: dict[str, str], body: dict[str, Any]
+    ) -> ServiceResponse:
+        response = requests.post(url=url, headers=headers, json=body)
+        response_text = self.parse_chat_response(response)
+
+        response_json = response.json()
+        if "usage" not in response_json:
+            self.log.error("no token usage in LLM response")
+            prompt_tokens = 0
+            completion_tokens = 0
         else:
-            # If there is a callback given, we stream the response.
-            # In this case, we need to compute the number of tokens ourselves, since OpenAI doesn't provide them.
-            # For the completion tokens, tiktoken is perfectly accurate.
-            # For the input tokens, unfortunately not. Here, we use a JSON dump of the conversation history.
-            # This is slightly inaccurate, but only by a few tokens.
-            # Also, this always leads to an overestimation, so the costs will still be under control.
+            prompt_tokens = response_json["usage"]["prompt_tokens"]
+            completion_tokens = response_json["usage"]["completion_tokens"]
 
-            response_text = ""
-            encoding = tiktoken.get_encoding("cl100k_base")
+        return response_text, prompt_tokens, completion_tokens
 
-            body = {
-                **body,
-                "stream": True
-            }
+    def _streaming_chat_completion(
+        self, callback: Callable, url: str, headers: dict[str, str], body: dict[str, Any]
+    ) -> ServiceResponse:
+        # In this case, we need to compute the number of tokens ourselves, since OpenAI doesn't provide them.
+        # For the completion tokens, tiktoken is perfectly accurate.
+        # For the input tokens, unfortunately not. Here, we use a JSON dump of the conversation history.
+        # This is slightly inaccurate, but only by a few tokens.
+        # Also, this always leads to an overestimation, so the costs will still be under control.
 
-            with EventSource(url=url, method="POST", headers=headers, json=body) as event_source:
-                for event in event_source:
-                    if event.data == "[DONE]":
-                        event_source.close()
-                        break
-                    chunk = json.loads(event.data)
+        response_text = ""
+        encoding = tiktoken.get_encoding("cl100k_base")
 
-                    if "choices" not in chunk or len(chunk["choices"]) == 0:
-                        continue
+        body = {**body, "stream": True}
 
-                    delta = chunk["choices"][0]["delta"]
-                    if delta is None or "content" not in delta or delta["content"] is None:
-                        continue
+        with EventSource(url=url, method="POST", headers=headers, json=body) as event_source:
+            for event in event_source:
+                if event.data == "[DONE]":
+                    event_source.close()
+                    break
+                chunk = json.loads(event.data)
 
-                    chunk_text = delta["content"]
-                    response_text += chunk_text
-                    callback(chunk_text)
+                if "choices" not in chunk or len(chunk["choices"]) == 0:
+                    continue
 
-            prompt_tokens = len(encoding.encode(text=json.dumps(self.conversation_history)))
-            completion_tokens = len(encoding.encode(text=response_text))
+                delta = chunk["choices"][0]["delta"]
+                if delta is None or "content" not in delta or delta["content"] is None:
+                    continue
+
+                chunk_text = delta["content"]
+                response_text += chunk_text
+                callback(chunk_text)
+
+        prompt_tokens = len(encoding.encode(text=json.dumps(self.conversation_history)))
+        completion_tokens = len(encoding.encode(text=response_text))
 
         return response_text, prompt_tokens, completion_tokens
