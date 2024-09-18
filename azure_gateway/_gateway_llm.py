@@ -10,7 +10,6 @@ from langchain_core.language_models.llms import LLM
 from openai import AzureOpenAI
 from requests_sse import EventSource
 
-from ._chat import parse_openai_chat_response
 from ._exceptions import OutOfQuotaError
 from ._logger import LoggerWrapper
 
@@ -126,6 +125,32 @@ class BaseGatewayLLM(LLM):
             self.log.error("there was an error querying the gateway")
             self.log.error(e)
 
+    @staticmethod
+    def _parse_chat_response(response: requests.Response) -> str:
+        """Parse a chat response to only the chat response."""
+        if not isinstance(response, requests.Response):
+            raise TypeError("Expected a requests.Response object")
+
+        if response.status_code != requests.codes.ok:
+            raise ValueError(f"Expected a successful HTTP response, got {response.status_code}")
+
+        try:
+            response_data = response.json()
+        except json.JSONDecodeError:
+            raise ValueError("Failed to decode JSON from response")
+
+        if not response_data.get("choices") or not isinstance(response_data["choices"], list):
+            raise ValueError('Response JSON does not contain "choices" list')
+
+        if len(response_data["choices"]) == 0:
+            raise ValueError('"choices" list is empty')
+
+        choice = response_data["choices"][0]
+        if "message" not in choice or "content" not in choice["message"]:
+            raise ValueError('Expected "message" and "content" keys in the response')
+
+        return choice["message"]["content"]
+
 
 class OpenAIGatewayLLM(BaseGatewayLLM):
     client: AzureOpenAI
@@ -148,7 +173,7 @@ class OpenAIGatewayLLM(BaseGatewayLLM):
         req_response = requests.Response()
         req_response.status_code = 200
         req_response._content = response.model_dump_json().encode()
-        response_text = parse_openai_chat_response(req_response)
+        response_text = self.parse_chat_response(req_response)
         return response_text, response.usage.prompt_tokens, response.usage.completion_tokens
 
     def _streaming_chat_completion(self, callback: Callable):
@@ -207,7 +232,7 @@ class GenericGatewayLLM(BaseGatewayLLM):
             # If there is no callback given, we simply use the regular chat completion.
 
             response = requests.post(url=url, headers=headers, json=body)
-            response_text = parse_openai_chat_response(response)
+            response_text = self.parse_chat_response(response)
 
             response_json = response.json()
             if "usage" not in response_json:

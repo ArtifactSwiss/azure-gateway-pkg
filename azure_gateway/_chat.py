@@ -1,4 +1,5 @@
 import json
+import warnings
 from typing import Any
 
 import requests
@@ -62,7 +63,13 @@ def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
 
 
 def parse_openai_chat_response(response: requests.Response) -> str:
-    """Parse a chat response to only the chat response."""
+    """DEPRECATED: Parse a chat response to only the chat response."""
+    warnings.warn(
+        message="parse_openai_chat_response() is deprecated and will be removed. Use one of the GatewayLLM classes instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not isinstance(response, requests.Response):
         raise TypeError("Expected a requests.Response object")
 
