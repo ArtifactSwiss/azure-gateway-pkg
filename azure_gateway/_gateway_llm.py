@@ -105,8 +105,6 @@ class BaseGatewayLLM(LLM):
 
     def _update_quota(self, prompt_tokens: int, completion_tokens: int):
         """Update the usage quota with the usage tokens specified in the given chat completion."""
-        additional_usage = [prompt_tokens, completion_tokens]
-
         quota_update_response = requests.post(
             os.environ["GATEWAY_HIGH_TRAFFIC_URL"],
             headers={
@@ -114,7 +112,7 @@ class BaseGatewayLLM(LLM):
                 "Authorization": f"Bearer {self.gateway_auth_token}",
             },
             params={"project_id": self.project_id},
-            json={"model_id": self.model_id, "usage_quantity": additional_usage},
+            json={"model_id": self.model_id, "usage_quantity": [prompt_tokens, completion_tokens]},
             timeout=10,
         )
         quota_update_response.raise_for_status()
