@@ -28,6 +28,7 @@ class BaseGatewayLLM(LLM):
     gateway_auth_token: str
     alert_log_threshold: float = 0.9
     logger: logging.Logger | None = None
+    log_prompts: bool = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -45,7 +46,8 @@ class BaseGatewayLLM(LLM):
     def _call(self, prompt: str, callback: Callback | None, **_):
         self._query_gateway_safely(query_function=self._check_quota)
 
-        self.log.info(f"PROMPT\n{self.log.indent_text(prompt)}")
+        if self.log_prompts:
+            self.log.info(f"PROMPT\n{self.log.indent_text(prompt)}")
         self.conversation_history.append({"role": "user", "content": prompt})
 
         response_text, prompt_tokens, completion_tokens = self._call_service(callback=callback)
@@ -55,7 +57,8 @@ class BaseGatewayLLM(LLM):
                 prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
             )
         )
-        self.log.info(f"RESPONSE\n{self.log.indent_text(response_text)}")
+        if self.log_prompts:
+            self.log.info(f"RESPONSE\n{self.log.indent_text(response_text)}")
 
         self.conversation_history.append({"role": "assistant", "content": response_text})
 
