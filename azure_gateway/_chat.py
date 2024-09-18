@@ -44,13 +44,19 @@ class OpenAIBody(BaseModel):
 
 def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
     """
-    Send a request to the specified OpenAI chat API.
+    DEPRECATED: Send a request to the specified OpenAI chat API.
 
     :param project_id: Project ID to log request to.
     :param params: The body parameters for the API (see docs).
     :param token: Authorization token for the API.
     :return: The response from the API.
     """
+    warnings.warn(
+        message="openai_chat_request() is deprecated and will be removed. Use one of the GatewayLLM classes instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
     url_with_project_id = f"{ENDPOINT_URL}/openai-chat?project_id={project_id}"
 
     if isinstance(params, dict):
