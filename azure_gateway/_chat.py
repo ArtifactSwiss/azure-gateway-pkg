@@ -52,7 +52,7 @@ def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
     :return: The response from the API.
     """
     warnings.warn(
-        message="openai_chat_request() is deprecated and will be removed. Use one of the GatewayLLM classes instead.",
+        message="openai_chat_request() is deprecated and will be removed. Use the OpenAIGatewayLLM class instead.",
         category=DeprecationWarning,
         stacklevel=2,
     )
@@ -71,7 +71,7 @@ def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
 def parse_openai_chat_response(response: requests.Response) -> str:
     """DEPRECATED: Parse a chat response to only the chat response."""
     warnings.warn(
-        message="parse_openai_chat_response() is deprecated and will be removed. Use one of the GatewayLLM classes instead.",
+        message="parse_openai_chat_response() is deprecated and will be removed. Use the OpenAIGatewayLLM class instead.",
         category=DeprecationWarning,
         stacklevel=2,
     )
