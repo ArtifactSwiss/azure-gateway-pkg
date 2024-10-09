@@ -1,4 +1,5 @@
 import json
+import warnings
 from typing import Any
 
 import requests
@@ -43,13 +44,19 @@ class OpenAIBody(BaseModel):
 
 def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
     """
-    Send a request to the specified OpenAI chat API.
+    DEPRECATED: Send a request to the specified OpenAI chat API.
 
     :param project_id: Project ID to log request to.
     :param params: The body parameters for the API (see docs).
     :param token: Authorization token for the API.
     :return: The response from the API.
     """
+    warnings.warn(
+        message="openai_chat_request() is deprecated and will be removed. Use the OpenAIGatewayLLM class instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
     url_with_project_id = f"{ENDPOINT_URL}/openai-chat?project_id={project_id}"
 
     if isinstance(params, dict):
@@ -62,7 +69,13 @@ def openai_chat_request(project_id: str, params: OpenAIBody | dict, token: str):
 
 
 def parse_openai_chat_response(response: requests.Response) -> str:
-    """Parse a chat response to only the chat response."""
+    """DEPRECATED: Parse a chat response to only the chat response."""
+    warnings.warn(
+        message="parse_openai_chat_response() is deprecated and will be removed. Use the OpenAIGatewayLLM class instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not isinstance(response, requests.Response):
         raise TypeError("Expected a requests.Response object")
 
