@@ -50,7 +50,7 @@ class BaseGatewayLLM(LLM):
         """Get the identifying parameters (required from langchain)."""
         return {}
 
-    def _call(self, prompt: str, callback: Callback | None = None, **_) -> str:
+    def _call(self, prompt: str, callback: Callback | None = None, seed: int | None = None, **_) -> str:
         self._query_gateway_safely(query_function=self._check_quota)
         if self.log_prompts:
             self.logger.info(f"PROMPT\n{textwrap.indent(prompt, 4 * ' ')}")
@@ -70,10 +70,10 @@ class BaseGatewayLLM(LLM):
     def _call_service(self, **_):
         raise NotImplementedError()
 
-    def call(self, prompt: str, callback: Callback | None = None) -> str:
+    def call(self, prompt: str, callback: Callback | None = None, seed: int | None = None) -> str:
         """Wrap-around method for Langchain's invoke method."""
         start = time.time()
-        response = self.invoke(input=prompt, config=None, callback=callback)
+        response = self.invoke(input=prompt, config=None, callback=callback, seed=seed)
         self.logger.info(f"CALLTIME - {time.time() - start}")
         return response
 
@@ -176,15 +176,15 @@ class OpenAIGatewayLLM(BaseGatewayLLM):
     client: AzureOpenAI
     temperature: float = 0.7
 
-    def _call_service(self, callback: Callback | None = None) -> ServiceResponse:
+    def _call_service(self, callback: Callback | None = None, seed: int | None = None) -> ServiceResponse:
         if callback is None:
-            return self._regular_chat_completion()
-        return self._streaming_chat_completion(callback)
+            return self._regular_chat_completion(seed=seed)
+        return self._streaming_chat_completion(callback, seed=seed)
 
-    def _regular_chat_completion(self) -> ServiceResponse:
+    def _regular_chat_completion(self, seed: int | None) -> ServiceResponse:
         self.logger.info("CALL - regular chat completion")
         response = self.client.chat.completions.create(
-            model=self.model_id, messages=self.conversation_history, temperature=self.temperature
+            model=self.model_id, messages=self.conversation_history, temperature=self.temperature, seed=seed
         )
         req_response = requests.Response()
         req_response.status_code = 200
@@ -192,7 +192,7 @@ class OpenAIGatewayLLM(BaseGatewayLLM):
         response_text = self._parse_chat_response(req_response)
         return response_text, response.usage.prompt_tokens, response.usage.completion_tokens
 
-    def _streaming_chat_completion(self, callback: Callable) -> ServiceResponse:
+    def _streaming_chat_completion(self, callback: Callable, seed: int | None) -> ServiceResponse:
         """
         If there is a callback given, we stream the response.
 
@@ -211,6 +211,7 @@ class OpenAIGatewayLLM(BaseGatewayLLM):
             model=self.model_id,
             messages=self.conversation_history,
             temperature=self.temperature,
+            seed = seed,
             stream=True,
         )
 
