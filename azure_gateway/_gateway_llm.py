@@ -56,7 +56,7 @@ class BaseGatewayLLM(LLM):
             self.logger.info(f"PROMPT\n{textwrap.indent(prompt, 4 * ' ')}")
         self.conversation_history.append({"role": "user", "content": prompt})
 
-        response_text, prompt_tokens, completion_tokens = self._call_service(callback=callback)
+        response_text, prompt_tokens, completion_tokens = self._call_service(callback=callback, seed=seed)
         self._query_gateway_safely(
             query_function=lambda: self._update_quota(
                 prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
